@@ -1,17 +1,21 @@
-import { createHmac, timingSafeEqual } from "crypto";
+import { createHash, createHmac, timingSafeEqual } from "crypto";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 export const COOKIE = "ng_session";
 const MAX_AGE_S = 60 * 60 * 24 * 90; // 90 dana
 
+// Rezervne vrednosti kada u Vercelu nije podešeno APP_PIN / SESSION_SECRET.
+// Šifra se ovde ne čuva, samo njen otisak. APP_PIN u Vercelu uvek ima prednost.
+const DEFAULT_PIN_HASH = "29a54381403b3a9379a93f5fb0450fe41b02329ef8b443310df81e94e79b8ed5";
+const DEFAULT_SECRET = "A-qrEsHlX2SudhWt2nB9ZAtfUPwPqvbAU15sNfPeieDpxtEW";
+const pinHash = (pin: string) => createHash("sha256").update("different-ng:" + pin).digest("hex");
+
 function secret() {
-  const s = process.env.SESSION_SECRET;
-  const pin = envPin();
-  if (!s || s.length < 16) throw new Error("SESSION_SECRET nije podešen (min 16 znakova)");
-  if (!pin) throw new Error("APP_PIN nije podešen");
+  const env = process.env.SESSION_SECRET || "";
+  const s = env.length >= 16 ? env : DEFAULT_SECRET;
   // Šifra je deo ključa: promena šifre odjavljuje sve uređaje.
-  return s + "|" + pin;
+  return s + "|" + (envPin() || DEFAULT_PIN_HASH);
 }
 
 // Uklanja razmake i navodnike koji se slučajno nalepe u Vercelu
@@ -20,9 +24,6 @@ export function envPin() {
 }
 
 export function configProblem(): string | null {
-  if (!envPin()) return "Šifra nije podešena na serveru. U Vercelu dodajte APP_PIN pa uradite Redeploy.";
-  const s = process.env.SESSION_SECRET || "";
-  if (s.length < 16) return "SESSION_SECRET nije podešen ili je kraći od 16 znakova. Ispravite u Vercelu pa uradite Redeploy.";
   return null;
 }
 
@@ -37,8 +38,10 @@ function safeEqual(a: string, b: string) {
 }
 
 export function checkPin(pin: string) {
+  if (!pin) return false;
   const real = envPin();
-  return real.length > 0 && safeEqual(pin, real);
+  if (real) return safeEqual(pin, real);
+  return safeEqual(pinHash(pin), DEFAULT_PIN_HASH);
 }
 
 export function makeToken() {
