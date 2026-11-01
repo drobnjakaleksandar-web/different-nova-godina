@@ -14,7 +14,10 @@ export async function GET() {
     .select("id, table_no, name, phone, seats, paid, created_at")
     .order("table_no", { ascending: true })
     .order("created_at", { ascending: true });
-  if (error) return NextResponse.json({ error: "Baza ne odgovara. Proverite Supabase ključeve i da li je pokrenut SQL." }, { status: 500 });
+  if (error) {
+    const detail = [error.code, error.message, (error as any).hint].filter(Boolean).join(" · ").slice(0, 300);
+    return NextResponse.json({ error: `Baza ne odgovara (${detail || "nepoznata greška"})` }, { status: 500 });
+  }
   return NextResponse.json({ reservations: data ?? [] }, { headers: { "Cache-Control": "no-store" } });
 }
 
