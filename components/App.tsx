@@ -188,6 +188,11 @@ function Main({ onLogout }: { onLogout: () => void }) {
   }
 
   const ql = q.trim().toLowerCase();
+  // bez obzira na kvačice: "visnjin" nalazi "Višnjin"
+  const fold = (x: string) => x.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "dj");
+  const qf = fold(q.trim());
+  const hits = qf ? (rows || []).filter((r) => fold(r.name).includes(qf) || fold(r.source || "").includes(qf) || (r.phone || "").replace(/\s/g, "").includes(qf.replace(/\s/g, "")))
+    .sort((a, b) => a.table_no - b.table_no) : [];
 
   return (
     <>
@@ -206,6 +211,22 @@ function Main({ onLogout }: { onLogout: () => void }) {
           <button className="btn" onClick={copyFree} disabled={!rows}>Kopiraj slobodna mesta</button>
           <button className="btn" onClick={() => setMode({ kind: "list" })} disabled={!rows}>Spisak gostiju</button>
         </div>
+
+        {ql && (
+          <section className="hits" aria-label="Rezultati pretrage">
+            {hits.length ? hits.map((r) => {
+              const t = TABLE_BY_NO.get(r.table_no);
+              return (
+                <button key={r.id} className="hit" onClick={() => setMode({ kind: "table", n: r.table_no })}>
+                  <span className="hit-t">Sto {r.table_no}</span>
+                  <span className="hit-n"><strong>{r.name}</strong>
+                    <small>{r.seats} {mesta(r.seats)}{r.source ? " · " + r.source : ""}{t ? " · " + ZONES[t.zone].short : ""}</small></span>
+                  <span className={"hit-s " + (r.paid ? "st-p" : "st-r")}>{r.paid ? "Plaćeno" : "Rezervisano"}</span>
+                </button>
+              );
+            }) : <p className="empty">Nema gosta „{q.trim()}".</p>}
+          </section>
+        )}
 
         <Stats rows={rows} sold={sold} paidSeats={paidSeats} />
 
@@ -226,7 +247,7 @@ function Main({ onLogout }: { onLogout: () => void }) {
             </div>
           </div>
           <div className={"mapscroll" + (zoom ? " zoom" : "")}>
-            <FloorMap byTable={byTable} sold={sold} paidSeats={paidSeats} q={ql} onPick={(n) => setMode({ kind: "table", n })} />
+            <FloorMap byTable={byTable} sold={sold} paidSeats={paidSeats} q={ql} hitTables={new Set(hits.map((h) => h.table_no))} onPick={(n) => setMode({ kind: "table", n })} />
           </div>
         </section>
 
@@ -309,8 +330,8 @@ function Stats({ rows, sold, paidSeats }: { rows: Reservation[] | null; sold: (n
 
 /* ---------------- floor map ---------------- */
 
-function FloorMap({ byTable, sold, paidSeats, q, onPick }: {
-  byTable: Map<number, Reservation[]>; sold: (n: number) => number; paidSeats: (n: number) => number; q: string; onPick: (n: number) => void;
+function FloorMap({ byTable, sold, paidSeats, q, hitTables, onPick }: {
+  byTable: Map<number, Reservation[]>; sold: (n: number) => number; paidSeats: (n: number) => number; q: string; hitTables: Set<number>; onPick: (n: number) => void;
 }) {
   const pillars: [number, number][] = [[179, 124], [627, 135], [174, 276], [633, 305], [158, 439], [637, 451]];
   return (
@@ -330,7 +351,7 @@ function FloorMap({ byTable, sold, paidSeats, q, onPick }: {
       {pillars.map(([x, y]) => <rect key={`${x}-${y}`} x={x - 11} y={y - 11} width={22} height={22} fill="var(--gold)" opacity={0.55} />)}
       {TABLES.map((t) => (
         <TableMark key={t.n} t={t} s={sold(t.n)} p={paidSeats(t.n)}
-          state={q ? ((byTable.get(t.n) || []).some((r) => r.name.toLowerCase().includes(q) || (r.source || "").toLowerCase().includes(q)) ? "hit" : "dim") : ""}
+          state={q ? (hitTables.has(t.n) ? "hit" : "dim") : ""}
           onPick={onPick} />
       ))}
     </svg>
