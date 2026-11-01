@@ -573,6 +573,25 @@ function ListSheet({ rows, byTable, onClose, toast, onFallback }: {
     else onFallback("Spisak gostiju", text);
   }
 
+  // "Zmijica" za WhatsApp: zona po zona, svaki sto u svom redu
+  function snake() {
+    return ZONE_KEYS.map((k) => {
+      const z = ZONES[k];
+      const lines = TABLES.filter((t) => t.zone === k).map((t) => {
+        const L = (byTable.get(t.n) || []).filter(keep);
+        const names = L.map((r) => `${r.name} ${r.seats}${r.paid ? " ✅" : ""}`).join(", ");
+        return `${t.n}. ${names ? names + " " : ""}(${t.cap}lj)`;
+      });
+      return `${z.short.toUpperCase()} ZONE (${z.price}e)\n${lines.join("\n")}`;
+    }).join("\n\n");
+  }
+
+  async function copySnake() {
+    const text = snake();
+    if (await copyText(text)) toast("Kopirano. Nalepite u WhatsApp grupu.");
+    else onFallback("Spisak za WhatsApp", text);
+  }
+
   return (
     <aside className="sheet wide" role="dialog" aria-modal="true" aria-labelledby="shTitle">
       <div className="sh-head">
@@ -586,9 +605,10 @@ function ListSheet({ rows, byTable, onClose, toast, onFallback }: {
             <option value="paid">Samo plaćeni</option>
             <option value="res">Samo rezervisani (neplaćeni)</option>
           </select>
+          <button className="primary" onClick={copySnake}>Kopiraj za WhatsApp</button>
           <div className="btns">
-            <button className="primary" onClick={download} disabled={!flat.length}>Preuzmi za Excel</button>
-            <button className="ghost" onClick={copy} disabled={!flat.length}>Kopiraj spisak</button>
+            <button className="ghost" onClick={download} disabled={!flat.length}>Preuzmi za Excel</button>
+            <button className="ghost" onClick={copy} disabled={!flat.length}>Kopiraj za Excel</button>
           </div>
         </div>
         <div className="tot"><span>Gostiju/grupa <b>{flat.length}</b></span><span>Mesta <b>{seats}</b></span><span>Iznos <b>{eur(sum)}</b></span></div>
