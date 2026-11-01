@@ -253,3 +253,4 @@ form.add .field { background: var(--surface); }
 form.edit { display: flex; flex-direction: column; gap: 8px; }
 form.edit .field { background: var(--surface); }
 .edit-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 4px; }
+.res .n small.src { display: block; color: var(--gold); opacity: .85; }

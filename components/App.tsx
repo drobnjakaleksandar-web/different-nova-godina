@@ -201,7 +201,7 @@ function Main({ onLogout }: { onLogout: () => void }) {
         </header>
 
         <div className="tools">
-          <input className="field" type="search" placeholder="Pronađi gosta po imenu…" aria-label="Pretraga gostiju"
+          <input className="field" type="search" placeholder="Pronađi gosta ili ko je poslao…" aria-label="Pretraga gostiju"
             value={q} onChange={(e) => setQ(e.target.value)} enterKeyHint="search" />
           <button className="btn" onClick={copyFree} disabled={!rows}>Kopiraj slobodna mesta</button>
           <button className="btn" onClick={() => setMode({ kind: "list" })} disabled={!rows}>Spisak gostiju</button>
@@ -330,7 +330,7 @@ function FloorMap({ byTable, sold, paidSeats, q, onPick }: {
       {pillars.map(([x, y]) => <rect key={`${x}-${y}`} x={x - 11} y={y - 11} width={22} height={22} fill="var(--gold)" opacity={0.55} />)}
       {TABLES.map((t) => (
         <TableMark key={t.n} t={t} s={sold(t.n)} p={paidSeats(t.n)}
-          state={q ? ((byTable.get(t.n) || []).some((r) => r.name.toLowerCase().includes(q)) ? "hit" : "dim") : ""}
+          state={q ? ((byTable.get(t.n) || []).some((r) => r.name.toLowerCase().includes(q) || (r.source || "").toLowerCase().includes(q)) ? "hit" : "dim") : ""}
           onPick={onPick} />
       ))}
     </svg>
@@ -370,6 +370,7 @@ function TableSheet({ table: t, list, onClose, reload, toast, onLogout }: {
   const free = Math.max(t.cap - s, 0);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [source, setSource] = useState("");
   const [qty, setQty] = useState(Math.min(2, Math.max(1, free)));
   const [paid, setPaid] = useState(false);
   const [err, setErr] = useState("");
@@ -379,13 +380,14 @@ function TableSheet({ table: t, list, onClose, reload, toast, onLogout }: {
   const [editId, setEditId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editPhone, setEditPhone] = useState("");
+  const [editSource, setEditSource] = useState("");
   const [editErr, setEditErr] = useState("");
 
   useEffect(() => { if (qty > free && free > 0) setQty(free); }, [free, qty]);
 
   function startEdit(r: Reservation) {
     setArmed(null); setEditErr("");
-    setEditId(r.id); setEditName(r.name); setEditPhone(r.phone || "");
+    setEditId(r.id); setEditName(r.name); setEditPhone(r.phone || ""); setEditSource(r.source || "");
   }
 
   async function saveEdit(e: FormEvent, r: Reservation) {
@@ -394,9 +396,9 @@ function TableSheet({ table: t, list, onClose, reload, toast, onLogout }: {
     if (!nm) { setEditErr("Ime ne može biti prazno."); return; }
     setPending(r.id); setEditErr("");
     try {
-      await api(`/api/reservations/${r.id}`, { method: "PATCH", body: JSON.stringify({ name: nm, phone: editPhone.trim() }) });
+      const res: any = await api(`/api/reservations/${r.id}`, { method: "PATCH", body: JSON.stringify({ name: nm, phone: editPhone.trim(), source: editSource.trim() }) });
       setEditId(null);
-      toast("Izmena sačuvana");
+      toast(res?.warning || "Izmena sačuvana");
     } catch (e: any) {
       if (e?.status === 401) { onLogout(); return; }
       setEditErr(e?.message || "Izmena nije sačuvana.");
@@ -416,9 +418,9 @@ function TableSheet({ table: t, list, onClose, reload, toast, onLogout }: {
     if (qty > free) { setErr(`Za ovim stolom je ostalo samo ${free} mesta.`); return; }
     setBusy(true); setErr("");
     try {
-      await api("/api/reservations", { method: "POST", body: JSON.stringify({ table_no: t.n, name: nm, phone: phone.trim(), seats: qty, paid }) });
-      setName(""); setPhone(""); setPaid(false); setQty(1);
-      toast(`Upisano: ${nm}, sto ${t.n}`);
+      const res: any = await api("/api/reservations", { method: "POST", body: JSON.stringify({ table_no: t.n, name: nm, phone: phone.trim(), source: source.trim(), seats: qty, paid }) });
+      setName(""); setPhone(""); setSource(""); setPaid(false); setQty(1);
+      toast(res?.warning || `Upisano: ${nm}, sto ${t.n}`);
     } catch (e: any) {
       if (e.status === 401) { onLogout(); return; }
       setErr(e.message);
@@ -478,6 +480,9 @@ function TableSheet({ table: t, list, onClose, reload, toast, onLogout }: {
                   <label className="sec-t" htmlFor={"ep-" + r.id}>Telefon</label>
                   <input id={"ep-" + r.id} className="field" type="tel" value={editPhone} maxLength={40}
                     autoComplete="off" placeholder="nije obavezno" onChange={(e) => setEditPhone(e.target.value)} />
+                  <label className="sec-t" htmlFor={"es-" + r.id}>Ko je poslao</label>
+                  <input id={"es-" + r.id} className="field" type="text" value={editSource} maxLength={80}
+                    autoComplete="off" placeholder="nije obavezno" onChange={(e) => setEditSource(e.target.value)} />
                   {editErr && <p className="err">{editErr}</p>}
                   <div className="edit-btns">
                     <button type="button" className="ghost" onClick={() => setEditId(null)} disabled={pending === r.id}>Otkaži</button>
@@ -487,7 +492,7 @@ function TableSheet({ table: t, list, onClose, reload, toast, onLogout }: {
               </li>
             ) : (
               <li key={r.id}>
-                <div className="n"><strong>{r.name}</strong><small>{r.phone ? r.phone + " · " : ""}{eur(r.seats * z.price)}</small></div>
+                <div className="n"><strong>{r.name}</strong><small>{r.phone ? r.phone + " · " : ""}{eur(r.seats * z.price)}</small>{r.source ? <small className="src">Poslao: {r.source}</small> : null}</div>
                 <span className="cnt">{r.seats}<em>{mesta(r.seats)}</em></span>
                 <div className="acts">
                   <button className={"pill " + (r.paid ? "paid" : "resv")} onClick={() => togglePaid(r)} disabled={pending === r.id}>
@@ -510,6 +515,8 @@ function TableSheet({ table: t, list, onClose, reload, toast, onLogout }: {
               value={name} onChange={(e) => setName(e.target.value)} maxLength={120} enterKeyHint="next" />
             <input className="field" id="fPhone" type="tel" placeholder="Telefon (nije obavezno)" autoComplete="off"
               value={phone} onChange={(e) => setPhone(e.target.value)} maxLength={40} />
+            <input className="field" id="fSource" type="text" placeholder="Ko je poslao (nije obavezno)" autoComplete="off"
+              value={source} onChange={(e) => setSource(e.target.value)} maxLength={80} />
             <div className="row">
               <div className="step">
                 <button type="button" onClick={() => setQty((v) => Math.max(1, v - 1))} aria-label="Manje">−</button>
@@ -548,10 +555,10 @@ function ListSheet({ rows, byTable, onClose, toast, onFallback }: {
 
   function table(sep: string) {
     const q = (v: unknown) => { const s = String(v ?? ""); return /[";,\n\t]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
-    const lines = [["Sto", "Zona", "Gost", "Mesta", "Telefon", "Status", "Cena po mestu", "Iznos"].join(sep)];
+    const lines = [["Sto", "Zona", "Gost", "Mesta", "Telefon", "Ko je poslao", "Status", "Cena po mestu", "Iznos"].join(sep)];
     flat.forEach(({ t, r }) => {
       const z = ZONES[t.zone];
-      lines.push([t.n, z.short, r.name, r.seats, r.phone, r.paid ? "Plaćeno" : "Rezervisano", z.price, r.seats * z.price].map(q).join(sep));
+      lines.push([t.n, z.short, r.name, r.seats, r.phone, r.source || "", r.paid ? "Plaćeno" : "Rezervisano", z.price, r.seats * z.price].map(q).join(sep));
     });
     return lines.join(sep === "\t" ? "\n" : "\r\n");
   }
@@ -625,7 +632,7 @@ function ListSheet({ rows, byTable, onClose, toast, onFallback }: {
                     <div className="grow" key={r.id}>
                       <div className="gm">
                         <strong>{r.name}</strong>
-                        <small>{r.phone ? r.phone + " · " : ""}<span className={r.paid ? "st-p" : "st-r"}>{r.paid ? "Plaćeno" : "Rezervisano"}</span></small>
+                        <small>{r.phone ? r.phone + " · " : ""}{r.source ? "Poslao: " + r.source + " · " : ""}<span className={r.paid ? "st-p" : "st-r"}>{r.paid ? "Plaćeno" : "Rezervisano"}</span></small>
                       </div>
                       <div className="gr"><b>{r.seats}</b> {mesta(r.seats)}<br />{eur(r.seats * z.price)}</div>
                     </div>

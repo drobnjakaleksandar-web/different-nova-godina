@@ -35,6 +35,7 @@ export type Reservation = {
   table_no: number;
   name: string;
   phone: string;
+  source?: string;
   seats: number;
   paid: boolean;
   created_at: string;

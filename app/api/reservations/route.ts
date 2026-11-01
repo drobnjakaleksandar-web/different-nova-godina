@@ -11,7 +11,7 @@ export async function GET() {
     return NextResponse.json({ error: "Baza nije povezana: u Vercelu fale SUPABASE_URL i SUPABASE_SECRET_KEY." }, { status: 500 });
   const { data, error } = await db()
     .from("reservations")
-    .select("id, table_no, name, phone, seats, paid, created_at")
+    .select("*")
     .order("table_no", { ascending: true })
     .order("created_at", { ascending: true });
   if (error) {
@@ -34,6 +34,7 @@ export async function POST(req: Request) {
   const phone = String(body?.phone ?? "").trim().slice(0, 40);
   const seats = Math.floor(Number(body?.seats));
   const paid = Boolean(body?.paid);
+  const source = String(body?.source ?? "").trim().slice(0, 80);
   if (!table) return NextResponse.json({ error: "Nepostojeći sto." }, { status: 400 });
   if (!name) return NextResponse.json({ error: "Upišite ime gosta ili grupe." }, { status: 400 });
   if (!(seats >= 1 && seats <= table.cap))
@@ -49,6 +50,10 @@ export async function POST(req: Request) {
       { error: free > 0 ? `Za stolom ${table.n} je ostalo samo ${free} mesta.` : `Sto ${table.n} je u međuvremenu popunjen.` },
       { status: 409 }
     );
+  }
+  if (source) {
+    const { error: e2 } = await db().from("reservations").update({ source }).eq("id", data.id);
+    if (e2) return NextResponse.json({ ok: true, id: data.id, warning: "Upisano, ali polje „Ko je poslao\" još nije dodato u bazu." });
   }
   return NextResponse.json({ ok: true, id: data.id });
 }

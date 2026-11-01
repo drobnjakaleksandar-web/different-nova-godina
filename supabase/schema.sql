@@ -43,3 +43,6 @@ $$;
 
 revoke execute on function public.add_reservation(int, int, text, text, int, boolean) from public, anon, authenticated;
 grant execute on function public.add_reservation(int, int, text, text, int, boolean) to service_role;
+
+-- Dodato kasnije: ko je poslao rezervaciju (portal, promoter, suvlasnik…)
+alter table public.reservations add column if not exists source text not null default '' check (char_length(source) <= 80);
