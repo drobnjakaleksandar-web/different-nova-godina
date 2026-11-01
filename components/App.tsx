@@ -588,10 +588,12 @@ function ListSheet({ rows, byTable, onClose, toast, onFallback }: {
         // uvek svi gosti; plaćeni su podebljani (*tekst* je bold u WhatsAppu)
         const L = byTable.get(t.n) || [];
         const names = L.map((r) => {
-          const who = `${r.name.replace(/\*/g, "")} ${r.seats}${r.source ? ` [${r.source.replace(/\*/g, "")}]` : ""}`;
+          const who = `${r.name.replace(/\*/g, "")} ${r.seats}${r.source ? ` (${r.source.replace(/\*/g, "")})` : ""}`;
           return r.paid ? `*${who}*` : who;
         }).join(", ");
-        return `${t.n}. ${names ? names + " " : ""}(${t.cap}lj)`;
+        // u zagradi koliko je još slobodnih mesta za stolom
+        const free = Math.max(t.cap - L.reduce((a, r) => a + r.seats, 0), 0);
+        return `${t.n}. ${names ? names + " " : ""}(${free}lj)`;
       });
       return `${z.short.toUpperCase()} ZONE (${z.price}e)\n${lines.join("\n")}`;
     }).join("\n\n");
