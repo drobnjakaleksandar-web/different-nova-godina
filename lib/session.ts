@@ -7,7 +7,7 @@ const MAX_AGE_S = 60 * 60 * 24 * 90; // 90 dana
 
 function secret() {
   const s = process.env.SESSION_SECRET;
-  const pin = process.env.APP_PIN;
+  const pin = (process.env.APP_PIN || "").trim();
   if (!s || s.length < 16) throw new Error("SESSION_SECRET nije podešen (min 16 znakova)");
   if (!pin) throw new Error("APP_PIN nije podešen");
   // Šifra je deo ključa: promena šifre odjavljuje sve uređaje.
@@ -25,7 +25,7 @@ function safeEqual(a: string, b: string) {
 }
 
 export function checkPin(pin: string) {
-  const real = process.env.APP_PIN || "";
+  const real = (process.env.APP_PIN || "").trim();
   return real.length > 0 && safeEqual(pin, real);
 }
 
