@@ -104,6 +104,7 @@ type Mode = { kind: "table"; n: number } | { kind: "list" } | { kind: "copy"; ti
 function Main({ onLogout }: { onLogout: () => void }) {
   const [rows, setRows] = useState<Reservation[] | null>(null);
   const [syncOk, setSyncOk] = useState(true);
+  const [syncErr, setSyncErr] = useState("");
   const [syncedAt, setSyncedAt] = useState<Date | null>(null);
   const [q, setQ] = useState("");
   const [mode, setMode] = useState<Mode>(null);
@@ -126,6 +127,7 @@ function Main({ onLogout }: { onLogout: () => void }) {
     } catch (e: any) {
       if (e.status === 401) { onLogout(); return; }
       setSyncOk(false);
+      setSyncErr(e.message || "");
     }
   }, [onLogout]);
 
@@ -232,7 +234,7 @@ function Main({ onLogout }: { onLogout: () => void }) {
           <span><i className={"dot" + (syncOk ? "" : " bad")} />
             {syncOk
               ? `Zajednička evidencija · osveženo ${syncedAt ? syncedAt.toLocaleTimeString("sr-RS") : "…"}`
-              : "Nema veze sa bazom. Proverite internet, pokušavam ponovo."}
+              : (syncErr || "Nema veze sa bazom. Proverite internet, pokušavam ponovo.")}
           </span>
           <span>Promene kolega se pojavljuju za nekoliko sekundi.</span>
         </div>

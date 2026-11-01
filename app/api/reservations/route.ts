@@ -7,12 +7,14 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   if (!isAuthed()) return unauthorized();
+  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SECRET_KEY)
+    return NextResponse.json({ error: "Baza nije povezana: u Vercelu fale SUPABASE_URL i SUPABASE_SECRET_KEY." }, { status: 500 });
   const { data, error } = await db()
     .from("reservations")
     .select("id, table_no, name, phone, seats, paid, created_at")
     .order("table_no", { ascending: true })
     .order("created_at", { ascending: true });
-  if (error) return NextResponse.json({ error: "Baza nije dostupna." }, { status: 500 });
+  if (error) return NextResponse.json({ error: "Baza ne odgovara. Proverite Supabase ključeve i da li je pokrenut SQL." }, { status: 500 });
   return NextResponse.json({ reservations: data ?? [] }, { headers: { "Cache-Control": "no-store" } });
 }
 
