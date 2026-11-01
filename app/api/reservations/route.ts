@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { isAuthed, unauthorized } from "@/lib/session";
-import { db } from "@/lib/supabase";
+import { db, supabaseKey, supabaseUrl } from "@/lib/supabase";
 import { TABLE_BY_NO } from "@/lib/tables";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   if (!isAuthed()) return unauthorized();
-  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SECRET_KEY)
+  if (!supabaseUrl() || !supabaseKey())
     return NextResponse.json({ error: "Baza nije povezana: u Vercelu fale SUPABASE_URL i SUPABASE_SECRET_KEY." }, { status: 500 });
   const { data, error } = await db()
     .from("reservations")
