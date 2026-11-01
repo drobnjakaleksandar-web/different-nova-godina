@@ -16,7 +16,7 @@ export async function GET() {
     .order("created_at", { ascending: true });
   if (error) {
     const detail = [error.code, error.message, (error as any).hint].filter(Boolean).join(" · ").slice(0, 300);
-    return NextResponse.json({ error: `Baza ne odgovara (${detail || "nepoznata greška"})` }, { status: 500 });
+    return NextResponse.json({ error: `Baza ne odgovara (${detail || "nepoznata greška"}) · adresa: ${supabaseUrl()}` }, { status: 500 });
   }
   return NextResponse.json({ reservations: data ?? [] }, { headers: { "Cache-Control": "no-store" } });
 }
