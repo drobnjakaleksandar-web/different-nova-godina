@@ -66,6 +66,7 @@ export default function App() {
 
 function Login({ onOk }: { onOk: () => void }) {
   const [pin, setPin] = useState("");
+  const [show, setShow] = useState(false);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   async function submit(e: FormEvent) {
@@ -83,8 +84,12 @@ function Login({ onOk }: { onOk: () => void }) {
           <div className="sub">Evidencija prodaje mesta</div>
         </div>
         <label className="sec-t" htmlFor="pin">Šifra</label>
-        <input id="pin" className="field" type="password" inputMode="numeric" autoComplete="current-password"
+        <input id="pin" className="field" type={show ? "text" : "password"} autoComplete="current-password"
+          autoCapitalize="none" autoCorrect="off" spellCheck={false}
           value={pin} onChange={(e) => setPin(e.target.value)} autoFocus />
+        <button type="button" className="ghost" onClick={() => setShow((v) => !v)}>
+          {show ? "Sakrij šifru" : "Prikaži šifru"}
+        </button>
         {err && <p className="err">{err}</p>}
         <button className="primary" disabled={busy}>{busy ? "Provera…" : "Uđi"}</button>
       </form>
