@@ -111,6 +111,26 @@ function Main({ onLogout }: { onLogout: () => void }) {
   const [toastMsg, setToastMsg] = useState("");
   const toastTimer = useRef<ReturnType<typeof setTimeout>>();
   const [zoom, setZoom] = useState(false);
+  const [focusN, setFocusN] = useState<number | null>(null);
+  const mapRef = useRef<HTMLElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  // Spusti stranicu do mape, pomeri mapu do stola i označi ga
+  function focusTable(n: number) {
+    const t = TABLE_BY_NO.get(n);
+    if (!t) return;
+    searchRef.current?.blur();
+    setFocusN(null);
+    requestAnimationFrame(() => setFocusN(n));
+    mapRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const box = scrollRef.current;
+    if (box) {
+      const svg = box.querySelector("svg");
+      const w = svg ? svg.getBoundingClientRect().width : box.scrollWidth;
+      box.scrollTo({ left: Math.max(0, (t.x / 1000) * w - box.clientWidth / 2), behavior: "smooth" });
+    }
+  }
 
   const toast = useCallback((m: string) => {
     setToastMsg(m);
@@ -189,7 +209,7 @@ function Main({ onLogout }: { onLogout: () => void }) {
 
   const ql = q.trim().toLowerCase();
   // bez obzira na kvačice: "visnjin" nalazi "Višnjin"
-  const fold = (x: string) => x.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "dj");
+  const fold = (x: string) => x.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[đð]/g, "dj");
   const qf = fold(q.trim());
   const hits = qf ? (rows || []).filter((r) => fold(r.name).includes(qf) || fold(r.source || "").includes(qf) || (r.phone || "").replace(/\s/g, "").includes(qf.replace(/\s/g, "")))
     .sort((a, b) => a.table_no - b.table_no) : [];
@@ -207,7 +227,8 @@ function Main({ onLogout }: { onLogout: () => void }) {
 
         <div className="tools">
           <input className="field" type="search" placeholder="Pronađi gosta ili ko je poslao…" aria-label="Pretraga gostiju"
-            value={q} onChange={(e) => setQ(e.target.value)} enterKeyHint="search" />
+            ref={searchRef} value={q} onChange={(e) => { setQ(e.target.value); setFocusN(null); }} enterKeyHint="search"
+            onKeyDown={(e) => { if (e.key === "Enter" && hits.length) { e.preventDefault(); focusTable(hits[0].table_no); } }} />
           <button className="btn" onClick={copyFree} disabled={!rows}>Kopiraj slobodna mesta</button>
           <button className="btn" onClick={() => setMode({ kind: "list" })} disabled={!rows}>Spisak gostiju</button>
         </div>
@@ -217,7 +238,7 @@ function Main({ onLogout }: { onLogout: () => void }) {
             {hits.length ? hits.map((r) => {
               const t = TABLE_BY_NO.get(r.table_no);
               return (
-                <button key={r.id} className="hit" onClick={() => setMode({ kind: "table", n: r.table_no })}>
+                <button key={r.id} className="hit" type="button" onClick={() => focusTable(r.table_no)}>
                   <span className="hit-t">Sto {r.table_no}</span>
                   <span className="hit-n"><strong>{r.name}</strong>
                     <small>{r.seats} {mesta(r.seats)}{r.source ? " · " + r.source : ""}{t ? " · " + ZONES[t.zone].short : ""}</small></span>
@@ -238,7 +259,7 @@ function Main({ onLogout }: { onLogout: () => void }) {
           <span><b style={{ background: "var(--free)", border: "1px solid var(--line)" }} />slobodno</span>
         </div>
 
-        <section className="mapcard" aria-label="Mapa stolova">
+        <section className="mapcard" aria-label="Mapa stolova" ref={mapRef}>
           <div className="maphead">
             <span className="hint">{zoom ? "Prevucite mapu levo-desno" : "Kliknite na sto za detalje"}</span>
             <div className="seg2" role="group" aria-label="Veličina mape">
@@ -246,8 +267,8 @@ function Main({ onLogout }: { onLogout: () => void }) {
               <button aria-pressed={zoom} onClick={() => setZoom(true)}>Uvećano</button>
             </div>
           </div>
-          <div className={"mapscroll" + (zoom ? " zoom" : "")}>
-            <FloorMap byTable={byTable} sold={sold} paidSeats={paidSeats} q={ql} hitTables={new Set(hits.map((h) => h.table_no))} onPick={(n) => setMode({ kind: "table", n })} />
+          <div className={"mapscroll" + (zoom ? " zoom" : "")} ref={scrollRef}>
+            <FloorMap byTable={byTable} sold={sold} paidSeats={paidSeats} q={ql} hitTables={new Set(hits.map((h) => h.table_no))} focusN={focusN} onPick={(n) => setMode({ kind: "table", n })} />
           </div>
         </section>
 
@@ -330,8 +351,8 @@ function Stats({ rows, sold, paidSeats }: { rows: Reservation[] | null; sold: (n
 
 /* ---------------- floor map ---------------- */
 
-function FloorMap({ byTable, sold, paidSeats, q, hitTables, onPick }: {
-  byTable: Map<number, Reservation[]>; sold: (n: number) => number; paidSeats: (n: number) => number; q: string; hitTables: Set<number>; onPick: (n: number) => void;
+function FloorMap({ byTable, sold, paidSeats, q, hitTables, focusN, onPick }: {
+  byTable: Map<number, Reservation[]>; sold: (n: number) => number; paidSeats: (n: number) => number; q: string; hitTables: Set<number>; focusN: number | null; onPick: (n: number) => void;
 }) {
   const pillars: [number, number][] = [[179, 124], [627, 135], [174, 276], [633, 305], [158, 439], [637, 451]];
   return (
@@ -351,14 +372,14 @@ function FloorMap({ byTable, sold, paidSeats, q, hitTables, onPick }: {
       {pillars.map(([x, y]) => <rect key={`${x}-${y}`} x={x - 11} y={y - 11} width={22} height={22} fill="var(--gold)" opacity={0.55} />)}
       {TABLES.map((t) => (
         <TableMark key={t.n} t={t} s={sold(t.n)} p={paidSeats(t.n)}
-          state={q ? (hitTables.has(t.n) ? "hit" : "dim") : ""}
+          state={q ? (hitTables.has(t.n) ? "hit" : "dim") : ""} focus={focusN === t.n}
           onPick={onPick} />
       ))}
     </svg>
   );
 }
 
-function TableMark({ t, s, p, state, onPick }: { t: Table; s: number; p: number; state: string; onPick: (n: number) => void }) {
+function TableMark({ t, s, p, state, focus, onPick }: { t: Table; s: number; p: number; state: string; focus?: boolean; onPick: (n: number) => void }) {
   const z = ZONES[t.zone], free = t.cap - s, full = free <= 0;
   const seats = [];
   for (let i = 0; i < t.cap; i++) {
@@ -371,6 +392,12 @@ function TableMark({ t, s, p, state, onPick }: { t: Table; s: number; p: number;
     <g className={"tbl " + state} tabIndex={0} role="button" aria-label={`Sto ${t.n}, ${z.name}, slobodno ${Math.max(free, 0)} od ${t.cap}`}
       onClick={() => onPick(t.n)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onPick(t.n); } }}>
       <circle cx={t.x} cy={t.y} r={42} fill="transparent" />
+      {focus && (
+        <circle cx={t.x} cy={t.y} r={46} fill="none" stroke="var(--fg)" strokeWidth={3} pointerEvents="none">
+          <animate attributeName="r" values="40;54;40" dur="1.2s" repeatCount="4" />
+          <animate attributeName="stroke-opacity" values="1;0.2;1" dur="1.2s" repeatCount="4" />
+        </circle>
+      )}
       {seats}
       <circle className="disc" cx={t.x} cy={t.y} r={24} fill={full ? z.color : "var(--surface-2)"} stroke={z.color} strokeWidth={1.5} />
       <text x={t.x} y={t.y - 3} textAnchor="middle" fill={full ? "var(--on-gold)" : "var(--fg)"} fontFamily="var(--display)" fontSize={17} fontWeight={700}>{t.n}</text>
