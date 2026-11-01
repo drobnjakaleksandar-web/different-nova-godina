@@ -247,3 +247,9 @@ form.add .field { background: var(--surface); }
   @keyframes slide-r { from { transform: translateX(24px); opacity: .6; } }
   @keyframes slide-u { from { transform: translateY(40px); opacity: .6; } }
 }
+
+/* izmena rezervacije */
+.res li.editing { display: block; padding: 12px; }
+form.edit { display: flex; flex-direction: column; gap: 8px; }
+form.edit .field { background: var(--surface); }
+.edit-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 4px; }

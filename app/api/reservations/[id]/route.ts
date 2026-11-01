@@ -15,8 +15,16 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   } catch {
     return NextResponse.json({ error: "Neispravan zahtev." }, { status: 400 });
   }
-  if (typeof body?.paid !== "boolean") return NextResponse.json({ error: "Neispravan zahtev." }, { status: 400 });
-  const { error } = await db().from("reservations").update({ paid: body.paid }).eq("id", params.id);
+  const patch: { paid?: boolean; name?: string; phone?: string } = {};
+  if (typeof body?.paid === "boolean") patch.paid = body.paid;
+  if (typeof body?.name === "string") {
+    const name = body.name.trim().slice(0, 120);
+    if (!name) return NextResponse.json({ error: "Ime ne može biti prazno." }, { status: 400 });
+    patch.name = name;
+  }
+  if (typeof body?.phone === "string") patch.phone = body.phone.trim().slice(0, 40);
+  if (!Object.keys(patch).length) return NextResponse.json({ error: "Neispravan zahtev." }, { status: 400 });
+  const { error } = await db().from("reservations").update(patch).eq("id", params.id);
   if (error) return NextResponse.json({ error: "Izmena nije sačuvana." }, { status: 500 });
   return NextResponse.json({ ok: true });
 }

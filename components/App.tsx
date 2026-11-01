@@ -376,8 +376,33 @@ function TableSheet({ table: t, list, onClose, reload, toast, onLogout }: {
   const [busy, setBusy] = useState(false);
   const [armed, setArmed] = useState<string | null>(null);
   const [pending, setPending] = useState<string | null>(null);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [editErr, setEditErr] = useState("");
 
   useEffect(() => { if (qty > free && free > 0) setQty(free); }, [free, qty]);
+
+  function startEdit(r: Reservation) {
+    setArmed(null); setEditErr("");
+    setEditId(r.id); setEditName(r.name); setEditPhone(r.phone || "");
+  }
+
+  async function saveEdit(e: FormEvent, r: Reservation) {
+    e.preventDefault();
+    const nm = editName.trim();
+    if (!nm) { setEditErr("Ime ne može biti prazno."); return; }
+    setPending(r.id); setEditErr("");
+    try {
+      await api(`/api/reservations/${r.id}`, { method: "PATCH", body: JSON.stringify({ name: nm, phone: editPhone.trim() }) });
+      setEditId(null);
+      toast("Izmena sačuvana");
+    } catch (e: any) {
+      if (e?.status === 401) { onLogout(); return; }
+      setEditErr(e?.message || "Izmena nije sačuvana.");
+    }
+    await reload(); setPending(null);
+  }
 
   function handle(e: any) {
     if (e?.status === 401) { onLogout(); return; }
@@ -444,7 +469,23 @@ function TableSheet({ table: t, list, onClose, reload, toast, onLogout }: {
         <p className="sec-t">Gosti za ovim stolom</p>
         {list.length ? (
           <ul className="res">
-            {list.map((r) => (
+            {list.map((r) => editId === r.id ? (
+              <li key={r.id} className="editing">
+                <form className="edit" onSubmit={(e) => saveEdit(e, r)} noValidate>
+                  <label className="sec-t" htmlFor={"en-" + r.id}>Ime gosta ili grupe</label>
+                  <input id={"en-" + r.id} className="field" type="text" value={editName} maxLength={120} autoFocus
+                    autoComplete="off" onChange={(e) => setEditName(e.target.value)} />
+                  <label className="sec-t" htmlFor={"ep-" + r.id}>Telefon</label>
+                  <input id={"ep-" + r.id} className="field" type="tel" value={editPhone} maxLength={40}
+                    autoComplete="off" placeholder="nije obavezno" onChange={(e) => setEditPhone(e.target.value)} />
+                  {editErr && <p className="err">{editErr}</p>}
+                  <div className="edit-btns">
+                    <button type="button" className="ghost" onClick={() => setEditId(null)} disabled={pending === r.id}>Otkaži</button>
+                    <button type="submit" className="primary" disabled={pending === r.id}>{pending === r.id ? "Čuvam…" : "Sačuvaj"}</button>
+                  </div>
+                </form>
+              </li>
+            ) : (
               <li key={r.id}>
                 <div className="n"><strong>{r.name}</strong><small>{r.phone ? r.phone + " · " : ""}{eur(r.seats * z.price)}</small></div>
                 <span className="cnt">{r.seats}<em>{mesta(r.seats)}</em></span>
@@ -452,6 +493,7 @@ function TableSheet({ table: t, list, onClose, reload, toast, onLogout }: {
                   <button className={"pill " + (r.paid ? "paid" : "resv")} onClick={() => togglePaid(r)} disabled={pending === r.id}>
                     {r.paid ? "Plaćeno ✓" : "Rezervisano"}
                   </button>
+                  <button className="del" onClick={() => startEdit(r)} disabled={pending === r.id}>Izmeni</button>
                   <button className={"del" + (armed === r.id ? " arm" : "")} onClick={() => del(r)} disabled={pending === r.id}>
                     {armed === r.id ? "Potvrdi" : "Obriši"}
                   </button>
