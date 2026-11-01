@@ -7,11 +7,23 @@ const MAX_AGE_S = 60 * 60 * 24 * 90; // 90 dana
 
 function secret() {
   const s = process.env.SESSION_SECRET;
-  const pin = (process.env.APP_PIN || "").trim();
+  const pin = envPin();
   if (!s || s.length < 16) throw new Error("SESSION_SECRET nije podešen (min 16 znakova)");
   if (!pin) throw new Error("APP_PIN nije podešen");
   // Šifra je deo ključa: promena šifre odjavljuje sve uređaje.
   return s + "|" + pin;
+}
+
+// Uklanja razmake i navodnike koji se slučajno nalepe u Vercelu
+export function envPin() {
+  return (process.env.APP_PIN || "").trim().replace(/^["']|["']$/g, "").trim();
+}
+
+export function configProblem(): string | null {
+  if (!envPin()) return "Šifra nije podešena na serveru. U Vercelu dodajte APP_PIN pa uradite Redeploy.";
+  const s = process.env.SESSION_SECRET || "";
+  if (s.length < 16) return "SESSION_SECRET nije podešen ili je kraći od 16 znakova. Ispravite u Vercelu pa uradite Redeploy.";
+  return null;
 }
 
 function sign(payload: string) {
@@ -25,7 +37,7 @@ function safeEqual(a: string, b: string) {
 }
 
 export function checkPin(pin: string) {
-  const real = (process.env.APP_PIN || "").trim();
+  const real = envPin();
   return real.length > 0 && safeEqual(pin, real);
 }
 

@@ -1,13 +1,16 @@
 import { NextResponse } from "next/server";
-import { checkPin, isAuthed, setSessionCookie } from "@/lib/session";
+import { checkPin, configProblem, isAuthed, setSessionCookie } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  if (configProblem()) return NextResponse.json({ authed: false });
   return NextResponse.json({ authed: isAuthed() });
 }
 
 export async function POST(req: Request) {
+  const problem = configProblem();
+  if (problem) return NextResponse.json({ error: problem }, { status: 500 });
   let pin = "";
   try {
     const body = await req.json();
