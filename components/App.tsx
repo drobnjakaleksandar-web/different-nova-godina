@@ -578,8 +578,9 @@ function ListSheet({ rows, byTable, onClose, toast, onFallback }: {
     return ZONE_KEYS.map((k) => {
       const z = ZONES[k];
       const lines = TABLES.filter((t) => t.zone === k).map((t) => {
-        const L = (byTable.get(t.n) || []).filter(keep);
-        const names = L.map((r) => `${r.name} ${r.seats}${r.paid ? " ✅" : ""}`).join(", ");
+        // uvek svi gosti; plaćeni su podebljani (*tekst* je bold u WhatsAppu)
+        const L = byTable.get(t.n) || [];
+        const names = L.map((r) => (r.paid ? `*${r.name.replace(/\*/g, "")} ${r.seats}*` : `${r.name} ${r.seats}`)).join(", ");
         return `${t.n}. ${names ? names + " " : ""}(${t.cap}lj)`;
       });
       return `${z.short.toUpperCase()} ZONE (${z.price}e)\n${lines.join("\n")}`;
