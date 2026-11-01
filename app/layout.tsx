@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   manifest: "/manifest.webmanifest",
   robots: { index: false, follow: false },
   appleWebApp: { capable: true, title: "Different NG", statusBarStyle: "black-translucent" },
-  icons: { icon: "/icon-192.png", apple: "/apple-touch-icon.png" }
+  icons: { icon: "/icon31-192.png", apple: "/apple-touch-icon-31.png" }
 };
 
 export const viewport: Viewport = {
