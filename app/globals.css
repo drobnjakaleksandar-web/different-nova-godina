@@ -14,6 +14,7 @@
   --danger: #e06a5c;
   --ok: #7fc49a;
   --warn: #e8b65a;
+  --dep: #e0975a;
   --on-gold: #2a1206;
   --display: "Barlow Condensed", "Arial Narrow", Arial, sans-serif;
   --body: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -268,3 +269,9 @@ form.edit .field { background: var(--surface); }
 .hit-n small { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
 .hit-s { font-size: 12px; font-weight: 600; flex: none; }
 .mapcard { scroll-margin-top: calc(12px + env(safe-area-inset-top, 0px)); }
+
+/* kaparisano */
+.st-d { color: var(--dep) !important; }
+.pill.deposit { color: var(--dep); }
+.pill.res { color: var(--warn); }
+.row .seg { flex: 1 1 100%; }

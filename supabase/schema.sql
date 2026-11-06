@@ -46,3 +46,6 @@ grant execute on function public.add_reservation(int, int, text, text, int, bool
 
 -- Dodato kasnije: ko je poslao rezervaciju (portal, promoter, suvlasnik…)
 alter table public.reservations add column if not exists source text not null default '' check (char_length(source) <= 80);
+
+-- Dodato kasnije: kaparisano (uplaćena kapara)
+alter table public.reservations add column if not exists deposit boolean not null default false;

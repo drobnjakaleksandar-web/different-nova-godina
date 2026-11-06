@@ -35,6 +35,7 @@ export async function POST(req: Request) {
   const seats = Math.floor(Number(body?.seats));
   const paid = Boolean(body?.paid);
   const source = String(body?.source ?? "").trim().slice(0, 80);
+  const deposit = !paid && Boolean(body?.deposit);
   if (!table) return NextResponse.json({ error: "Nepostojeći sto." }, { status: 400 });
   if (!name) return NextResponse.json({ error: "Upišite ime gosta ili grupe." }, { status: 400 });
   if (!(seats >= 1 && seats <= table.cap))
@@ -51,9 +52,12 @@ export async function POST(req: Request) {
       { status: 409 }
     );
   }
-  if (source) {
-    const { error: e2 } = await db().from("reservations").update({ source }).eq("id", data.id);
-    if (e2) return NextResponse.json({ ok: true, id: data.id, warning: "Upisano, ali polje „Ko je poslao\" još nije dodato u bazu." });
+  const extra: { source?: string; deposit?: boolean } = {};
+  if (source) extra.source = source;
+  if (deposit) extra.deposit = true;
+  if (Object.keys(extra).length) {
+    const { error: e2 } = await db().from("reservations").update(extra).eq("id", data.id);
+    if (e2) return NextResponse.json({ ok: true, id: data.id, warning: "Upisano, ali „Kaparisano\" ili „Ko je poslao\" još nisu dodati u bazu (pokrenite SQL)." });
   }
   return NextResponse.json({ ok: true, id: data.id });
 }

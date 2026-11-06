@@ -38,5 +38,11 @@ export type Reservation = {
   source?: string;
   seats: number;
   paid: boolean;
+  deposit?: boolean;
   created_at: string;
 };
+
+export type Status = "paid" | "deposit" | "res";
+export const statusOf = (r: Reservation): Status => (r.paid ? "paid" : r.deposit ? "deposit" : "res");
+export const STATUS_LABEL: Record<Status, string> = { paid: "Plaćeno", deposit: "Kaparisano", res: "Rezervisano" };
+export const STATUS_CLASS: Record<Status, string> = { paid: "st-p", deposit: "st-d", res: "st-r" };

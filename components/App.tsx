@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Reservation, Table, TABLES, TABLE_BY_NO, TOTAL_CAP, ZONES, ZONE_KEYS, ZoneKey } from "@/lib/tables";
+import { Reservation, Status, STATUS_CLASS, STATUS_LABEL, statusOf, Table, TABLES, TABLE_BY_NO, TOTAL_CAP, ZONES, ZONE_KEYS, ZoneKey } from "@/lib/tables";
 
 const POLL_MS = 4000;
 
@@ -178,6 +178,7 @@ function Main({ onLogout }: { onLogout: () => void }) {
   }, [rows]);
   const sold = (n: number) => (byTable.get(n) || []).reduce((s, r) => s + r.seats, 0);
   const paidSeats = (n: number) => (byTable.get(n) || []).reduce((s, r) => s + (r.paid ? r.seats : 0), 0);
+  const depSeats = (n: number) => (byTable.get(n) || []).reduce((s, r) => s + (statusOf(r) === "deposit" ? r.seats : 0), 0);
 
   async function logout() {
     try { await api("/api/logout", { method: "POST" }); } catch {}
@@ -242,19 +243,21 @@ function Main({ onLogout }: { onLogout: () => void }) {
                   <span className="hit-t">Sto {r.table_no}</span>
                   <span className="hit-n"><strong>{r.name}</strong>
                     <small>{r.seats} {mesta(r.seats)}{r.source ? " · " + r.source : ""}{t ? " · " + ZONES[t.zone].short : ""}</small></span>
-                  <span className={"hit-s " + (r.paid ? "st-p" : "st-r")}>{r.paid ? "Plaćeno" : "Rezervisano"}</span>
+                  <span className={"hit-s " + STATUS_CLASS[statusOf(r)]}>{STATUS_LABEL[statusOf(r)]}</span>
                 </button>
               );
             }) : <p className="empty">Nema gosta „{q.trim()}".</p>}
           </section>
         )}
 
-        <Stats rows={rows} sold={sold} paidSeats={paidSeats} />
+        <Stats rows={rows} sold={sold} paidSeats={paidSeats} depSeats={depSeats} />
 
         <div className="legend">
           <span><b style={{ background: "var(--gold)" }} />Gold · 135€</span>
           <span><b style={{ background: "var(--silver)" }} />Silver · 120€</span>
           <span><b style={{ background: "var(--bronze)" }} />Bronze · 95€</span>
+          <span><b style={{ background: "var(--gold)" }} />plaćeno</span>
+          <span><b style={{ background: "linear-gradient(to top, var(--gold) 50%, var(--surface-2) 50%)", border: "1.5px solid var(--gold)" }} />kaparisano</span>
           <span><b style={{ background: "var(--surface-2)", border: "1.5px solid var(--gold)" }} />rezervisano</span>
           <span><b style={{ background: "var(--free)", border: "1px solid var(--line)" }} />slobodno</span>
         </div>
@@ -268,7 +271,7 @@ function Main({ onLogout }: { onLogout: () => void }) {
             </div>
           </div>
           <div className={"mapscroll" + (zoom ? " zoom" : "")} ref={scrollRef}>
-            <FloorMap byTable={byTable} sold={sold} paidSeats={paidSeats} q={ql} hitTables={new Set(hits.map((h) => h.table_no))} focusN={focusN} onPick={(n) => setMode({ kind: "table", n })} />
+            <FloorMap byTable={byTable} sold={sold} paidSeats={paidSeats} depSeats={depSeats} q={ql} hitTables={new Set(hits.map((h) => h.table_no))} focusN={focusN} onPick={(n) => setMode({ kind: "table", n })} />
           </div>
         </section>
 
@@ -310,16 +313,18 @@ function Main({ onLogout }: { onLogout: () => void }) {
 
 /* ---------------- stats ---------------- */
 
-function Stats({ rows, sold, paidSeats }: { rows: Reservation[] | null; sold: (n: number) => number; paidSeats: (n: number) => number }) {
+function Stats({ rows, sold, paidSeats, depSeats }: { rows: Reservation[] | null; sold: (n: number) => number; paidSeats: (n: number) => number; depSeats: (n: number) => number }) {
   const per = ZONE_KEYS.map((k) => {
     const ts = TABLES.filter((t) => t.zone === k), price = ZONES[k].price;
     const cap = ts.reduce((s, t) => s + t.cap, 0);
     const s = ts.reduce((a, t) => a + sold(t.n), 0);
     const p = ts.reduce((a, t) => a + paidSeats(t.n), 0);
-    return { k, cap, s, p, rev: s * price, revPaid: p * price };
+    const d = ts.reduce((a, t) => a + depSeats(t.n), 0);
+    return { k, cap, s, p, d, rev: s * price, revPaid: p * price };
   });
   const tot = per.reduce((a, z) => a + z.s, 0);
   const totPaid = per.reduce((a, z) => a + z.p, 0);
+  const totDep = per.reduce((a, z) => a + z.d, 0);
   const rev = per.reduce((a, z) => a + z.rev, 0);
   const revPaid = per.reduce((a, z) => a + z.revPaid, 0);
   const full = TABLES.filter((t) => sold(t.n) >= t.cap).length;
@@ -329,8 +334,9 @@ function Stats({ rows, sold, paidSeats }: { rows: Reservation[] | null; sold: (n
       <div className="stat total">
         <span className="lbl">Ukupno prodato</span>
         <span className="big">{rows ? tot : "–"} <small>/ {TOTAL_CAP} mesta</small></span>
-        <div className="bar"><i style={{ width: pct(totPaid, TOTAL_CAP), background: "var(--ok)" }} /><i style={{ width: pct(tot - totPaid, TOTAL_CAP), background: "var(--warn)" }} /></div>
+        <div className="bar"><i style={{ width: pct(totPaid, TOTAL_CAP), background: "var(--ok)" }} /><i style={{ width: pct(totDep, TOTAL_CAP), background: "var(--dep)" }} /><i style={{ width: pct(tot - totPaid - totDep, TOTAL_CAP), background: "var(--warn)" }} /></div>
         <span className="meta">Slobodno <b>{TOTAL_CAP - tot}</b> · Punih stolova <b>{full}/36</b></span>
+        <span className="meta">Plaćeno <b className="st-p">{totPaid}</b> · Kaparisano <b className="st-d">{totDep}</b> · Rezervisano <b className="st-r">{tot - totPaid - totDep}</b> mesta</span>
         <span className="meta">Naplaćeno <b className="st-p">{eur(revPaid)}</b> · Čeka uplatu <b className="st-r">{eur(rev - revPaid)}</b></span>
       </div>
       {per.map((z) => {
@@ -339,7 +345,7 @@ function Stats({ rows, sold, paidSeats }: { rows: Reservation[] | null; sold: (n
           <div className={`stat z-${z.k}`} key={z.k}>
             <span className="lbl">{Z.short} · {Z.price}€</span>
             <span className="big">{z.s} <small>/ {z.cap}</small></span>
-            <div className="bar"><i style={{ width: pct(z.p, z.cap), background: Z.color }} /><i style={{ width: pct(z.s - z.p, z.cap), background: Z.color, opacity: .4 }} /></div>
+            <div className="bar"><i style={{ width: pct(z.p, z.cap), background: Z.color }} /><i style={{ width: pct(z.d, z.cap), background: Z.color, opacity: .7 }} /><i style={{ width: pct(z.s - z.p - z.d, z.cap), background: Z.color, opacity: .35 }} /></div>
             <span className="meta">Ostalo <b>{z.cap - z.s}</b></span>
             <span className="meta">{eur(z.rev)}</span>
           </div>
@@ -351,8 +357,8 @@ function Stats({ rows, sold, paidSeats }: { rows: Reservation[] | null; sold: (n
 
 /* ---------------- floor map ---------------- */
 
-function FloorMap({ byTable, sold, paidSeats, q, hitTables, focusN, onPick }: {
-  byTable: Map<number, Reservation[]>; sold: (n: number) => number; paidSeats: (n: number) => number; q: string; hitTables: Set<number>; focusN: number | null; onPick: (n: number) => void;
+function FloorMap({ byTable, sold, paidSeats, depSeats, q, hitTables, focusN, onPick }: {
+  byTable: Map<number, Reservation[]>; sold: (n: number) => number; paidSeats: (n: number) => number; depSeats: (n: number) => number; q: string; hitTables: Set<number>; focusN: number | null; onPick: (n: number) => void;
 }) {
   const pillars: [number, number][] = [[179, 124], [627, 135], [174, 276], [633, 305], [158, 439], [637, 451]];
   return (
@@ -371,7 +377,7 @@ function FloorMap({ byTable, sold, paidSeats, q, hitTables, focusN, onPick }: {
       ))}
       {pillars.map(([x, y]) => <rect key={`${x}-${y}`} x={x - 11} y={y - 11} width={22} height={22} fill="var(--gold)" opacity={0.55} />)}
       {TABLES.map((t) => (
-        <TableMark key={t.n} t={t} s={sold(t.n)} p={paidSeats(t.n)}
+        <TableMark key={t.n} t={t} s={sold(t.n)} p={paidSeats(t.n)} d={depSeats(t.n)}
           state={q ? (hitTables.has(t.n) ? "hit" : "dim") : ""} focus={focusN === t.n}
           onPick={onPick} />
       ))}
@@ -379,12 +385,18 @@ function FloorMap({ byTable, sold, paidSeats, q, hitTables, focusN, onPick }: {
   );
 }
 
-function TableMark({ t, s, p, state, focus, onPick }: { t: Table; s: number; p: number; state: string; focus?: boolean; onPick: (n: number) => void }) {
+function TableMark({ t, s, p, d, state, focus, onPick }: { t: Table; s: number; p: number; d: number; state: string; focus?: boolean; onPick: (n: number) => void }) {
   const z = ZONES[t.zone], free = t.cap - s, full = free <= 0;
   const seats = [];
   for (let i = 0; i < t.cap; i++) {
     const a = -Math.PI / 2 + (i * 2 * Math.PI) / t.cap, cx = t.x + 33 * Math.cos(a), cy = t.y + 33 * Math.sin(a);
     if (i < p) seats.push(<circle key={i} cx={cx} cy={cy} r={5} fill={z.color} />);
+    else if (i < p + d) seats.push(
+      <g key={i}>
+        <circle cx={cx} cy={cy} r={4.3} fill="var(--surface-2)" stroke={z.color} strokeWidth={1.6} />
+        <path d={`M ${cx - 4.3} ${cy} A 4.3 4.3 0 0 0 ${cx + 4.3} ${cy} Z`} fill={z.color} />
+      </g>
+    );
     else if (i < s) seats.push(<circle key={i} cx={cx} cy={cy} r={4.3} fill="var(--surface-2)" stroke={z.color} strokeWidth={1.6} />);
     else seats.push(<circle key={i} cx={cx} cy={cy} r={5} fill="var(--free)" stroke="var(--line)" />);
   }
@@ -415,12 +427,13 @@ function TableSheet({ table: t, list, onClose, reload, toast, onLogout }: {
   const z = ZONES[t.zone];
   const s = list.reduce((a, r) => a + r.seats, 0);
   const p = list.reduce((a, r) => a + (r.paid ? r.seats : 0), 0);
+  const dp = list.reduce((a, r) => a + (statusOf(r) === "deposit" ? r.seats : 0), 0);
   const free = Math.max(t.cap - s, 0);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [source, setSource] = useState("");
   const [qty, setQty] = useState(Math.min(2, Math.max(1, free)));
-  const [paid, setPaid] = useState(false);
+  const [status, setStatus] = useState<Status>("res");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [armed, setArmed] = useState<string | null>(null);
@@ -466,8 +479,8 @@ function TableSheet({ table: t, list, onClose, reload, toast, onLogout }: {
     if (qty > free) { setErr(`Za ovim stolom je ostalo samo ${free} mesta.`); return; }
     setBusy(true); setErr("");
     try {
-      const res: any = await api("/api/reservations", { method: "POST", body: JSON.stringify({ table_no: t.n, name: nm, phone: phone.trim(), source: source.trim(), seats: qty, paid }) });
-      setName(""); setPhone(""); setSource(""); setPaid(false); setQty(1);
+      const res: any = await api("/api/reservations", { method: "POST", body: JSON.stringify({ table_no: t.n, name: nm, phone: phone.trim(), source: source.trim(), seats: qty, paid: status === "paid", deposit: status === "deposit" }) });
+      setName(""); setPhone(""); setSource(""); setStatus("res"); setQty(1);
       toast(res?.warning || `Upisano: ${nm}, sto ${t.n}`);
     } catch (e: any) {
       if (e.status === 401) { onLogout(); return; }
@@ -481,8 +494,11 @@ function TableSheet({ table: t, list, onClose, reload, toast, onLogout }: {
   async function togglePaid(r: Reservation) {
     setPending(r.id);
     try {
-      await api(`/api/reservations/${r.id}`, { method: "PATCH", body: JSON.stringify({ paid: !r.paid }) });
-      toast(!r.paid ? `${r.name}: plaćeno` : `${r.name}: vraćeno na rezervisano`);
+      // Rezervisano → Kaparisano → Plaćeno → Rezervisano
+      const cur = statusOf(r);
+      const next: Status = cur === "res" ? "deposit" : cur === "deposit" ? "paid" : "res";
+      await api(`/api/reservations/${r.id}`, { method: "PATCH", body: JSON.stringify({ paid: next === "paid", deposit: next === "deposit" }) });
+      toast(`${r.name}: ${STATUS_LABEL[next].toLowerCase()}`);
     } catch (e) { handle(e); }
     await reload(); setPending(null);
   }
@@ -495,7 +511,8 @@ function TableSheet({ table: t, list, onClose, reload, toast, onLogout }: {
     await reload(); setPending(null);
   }
 
-  const ordered = [...list].sort((a, b) => Number(b.paid) - Number(a.paid));
+  const rank: Record<Status, number> = { paid: 0, deposit: 1, res: 2 };
+  const ordered = [...list].sort((a, b) => rank[statusOf(a)] - rank[statusOf(b)]);
   return (
     <aside className="sheet" role="dialog" aria-modal="true" aria-labelledby="shTitle">
       <div className="sh-head">
@@ -508,10 +525,12 @@ function TableSheet({ table: t, list, onClose, reload, toast, onLogout }: {
           <div><span>Slobodno</span><strong style={{ color: free ? "var(--fg)" : "var(--danger)" }}>{free}</strong></div>
           <div><span>Iznos</span><strong>{eur(s * z.price)}</strong></div>
         </div>
-        <p className="money">Naplaćeno <b className="st-p">{eur(p * z.price)}</b> · Čeka uplatu <b className="st-r">{eur((s - p) * z.price)}</b></p>
+        <p className="money">{dp > 0 && <>Kaparisano <b className="st-d">{dp} {mesta(dp)}</b> · </>}Naplaćeno <b className="st-p">{eur(p * z.price)}</b> · Čeka uplatu <b className="st-r">{eur((s - p) * z.price)}</b></p>
         <div className="seats" aria-label={`${s} od ${t.cap} stolica prodato`}>
           {ordered.flatMap((r) => Array.from({ length: r.seats }, (_, i) => (
-            <i key={r.id + i} title={r.name} style={r.paid ? { background: z.color, borderColor: z.color } : { background: "var(--surface-2)", borderColor: z.color }} />
+            <i key={r.id + i} title={r.name} style={r.paid ? { background: z.color, borderColor: z.color }
+              : r.deposit ? { background: `linear-gradient(to top, ${z.color} 50%, var(--surface-2) 50%)`, borderColor: z.color }
+              : { background: "var(--surface-2)", borderColor: z.color }} />
           )))}
           {Array.from({ length: free }, (_, i) => <i key={"f" + i} />)}
         </div>
@@ -543,8 +562,8 @@ function TableSheet({ table: t, list, onClose, reload, toast, onLogout }: {
                 <div className="n"><strong>{r.name}</strong><small>{r.phone ? r.phone + " · " : ""}{eur(r.seats * z.price)}</small>{r.source ? <small className="src">Poslao: {r.source}</small> : null}</div>
                 <span className="cnt">{r.seats}<em>{mesta(r.seats)}</em></span>
                 <div className="acts">
-                  <button className={"pill " + (r.paid ? "paid" : "resv")} onClick={() => togglePaid(r)} disabled={pending === r.id}>
-                    {r.paid ? "Plaćeno ✓" : "Rezervisano"}
+                  <button className={"pill " + statusOf(r)} onClick={() => togglePaid(r)} disabled={pending === r.id} title="Promeni status">
+                    {statusOf(r) === "paid" ? "Plaćeno ✓" : STATUS_LABEL[statusOf(r)]}
                   </button>
                   <button className="del" onClick={() => startEdit(r)} disabled={pending === r.id}>Izmeni</button>
                   <button className={"del" + (armed === r.id ? " arm" : "")} onClick={() => del(r)} disabled={pending === r.id}>
@@ -572,8 +591,9 @@ function TableSheet({ table: t, list, onClose, reload, toast, onLogout }: {
                 <button type="button" onClick={() => setQty((v) => Math.min(free, v + 1))} aria-label="Više">+</button>
               </div>
               <div className="seg" role="group" aria-label="Status">
-                <button type="button" aria-pressed={!paid} onClick={() => setPaid(false)}>Rezervisano</button>
-                <button type="button" aria-pressed={paid} onClick={() => setPaid(true)}>Plaćeno</button>
+                <button type="button" aria-pressed={status === "res"} onClick={() => setStatus("res")}>Rezervisano</button>
+                <button type="button" aria-pressed={status === "deposit"} onClick={() => setStatus("deposit")}>Kaparisano</button>
+                <button type="button" aria-pressed={status === "paid"} onClick={() => setStatus("paid")}>Plaćeno</button>
               </div>
             </div>
             <button className="primary" type="submit" disabled={busy}>
@@ -589,13 +609,13 @@ function TableSheet({ table: t, list, onClose, reload, toast, onLogout }: {
 
 /* ---------------- guest list ---------------- */
 
-type Filter = "all" | "paid" | "res";
+type Filter = "all" | Status;
 
 function ListSheet({ rows, byTable, onClose, toast, onFallback }: {
   rows: Reservation[]; byTable: Map<number, Reservation[]>; onClose: () => void; toast: (m: string) => void; onFallback: (t: string, x: string) => void;
 }) {
   const [filter, setFilter] = useState<Filter>("all");
-  const keep = (r: Reservation) => filter === "all" || (filter === "paid" ? r.paid : !r.paid);
+  const keep = (r: Reservation) => filter === "all" || statusOf(r) === filter;
   const groups = TABLES.map((t) => ({ t, list: (byTable.get(t.n) || []).filter(keep) })).filter((g) => g.list.length);
   const flat = groups.flatMap((g) => g.list.map((r) => ({ t: g.t, r })));
   const seats = flat.reduce((a, x) => a + x.r.seats, 0);
@@ -606,13 +626,13 @@ function ListSheet({ rows, byTable, onClose, toast, onFallback }: {
     const lines = [["Sto", "Zona", "Gost", "Mesta", "Telefon", "Ko je poslao", "Status", "Cena po mestu", "Iznos"].join(sep)];
     flat.forEach(({ t, r }) => {
       const z = ZONES[t.zone];
-      lines.push([t.n, z.short, r.name, r.seats, r.phone, r.source || "", r.paid ? "Plaćeno" : "Rezervisano", z.price, r.seats * z.price].map(q).join(sep));
+      lines.push([t.n, z.short, r.name, r.seats, r.phone, r.source || "", STATUS_LABEL[statusOf(r)], z.price, r.seats * z.price].map(q).join(sep));
     });
     return lines.join(sep === "\t" ? "\n" : "\r\n");
   }
 
   function download() {
-    const suffix = filter === "paid" ? "-placeni" : filter === "res" ? "-rezervisani" : "";
+    const suffix = filter === "paid" ? "-placeni" : filter === "deposit" ? "-kaparisani" : filter === "res" ? "-rezervisani" : "";
     const blob = new Blob(["﻿" + table(";")], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -637,7 +657,8 @@ function ListSheet({ rows, byTable, onClose, toast, onFallback }: {
         const L = byTable.get(t.n) || [];
         const names = L.map((r) => {
           const who = `${r.name.replace(/\*/g, "")} ${r.seats}${r.source ? ` (${r.source.replace(/\*/g, "")})` : ""}`;
-          return r.paid ? `*${who}*` : who;
+          // plaćeno = *podebljano*, kaparisano = _iskošeno_ (WhatsApp)
+          return r.paid ? `*${who}*` : r.deposit ? `_${who.replace(/_/g, " ")}_` : who;
         }).join(", ");
         // u zagradi koliko je još slobodnih mesta za stolom
         const free = Math.max(t.cap - L.reduce((a, r) => a + r.seats, 0), 0);
@@ -664,7 +685,8 @@ function ListSheet({ rows, byTable, onClose, toast, onFallback }: {
           <select className="field" value={filter} onChange={(e) => setFilter(e.target.value as Filter)} aria-label="Prikaži">
             <option value="all">Svi gosti</option>
             <option value="paid">Samo plaćeni</option>
-            <option value="res">Samo rezervisani (neplaćeni)</option>
+            <option value="deposit">Samo kaparisani</option>
+            <option value="res">Samo rezervisani (bez uplate)</option>
           </select>
           <button className="primary" onClick={copySnake}>Kopiraj za WhatsApp</button>
           <div className="btns">
@@ -685,7 +707,7 @@ function ListSheet({ rows, byTable, onClose, toast, onFallback }: {
                     <div className="grow" key={r.id}>
                       <div className="gm">
                         <strong>{r.name}</strong>
-                        <small>{r.phone ? r.phone + " · " : ""}{r.source ? "Poslao: " + r.source + " · " : ""}<span className={r.paid ? "st-p" : "st-r"}>{r.paid ? "Plaćeno" : "Rezervisano"}</span></small>
+                        <small>{r.phone ? r.phone + " · " : ""}{r.source ? "Poslao: " + r.source + " · " : ""}<span className={STATUS_CLASS[statusOf(r)]}>{STATUS_LABEL[statusOf(r)]}</span></small>
                       </div>
                       <div className="gr"><b>{r.seats}</b> {mesta(r.seats)}<br />{eur(r.seats * z.price)}</div>
                     </div>
