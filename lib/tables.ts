@@ -46,3 +46,8 @@ export type Status = "paid" | "deposit" | "res";
 export const statusOf = (r: Reservation): Status => (r.paid ? "paid" : r.deposit ? "deposit" : "res");
 export const STATUS_LABEL: Record<Status, string> = { paid: "Plaćeno", deposit: "Kaparisano", res: "Rezervisano" };
 export const STATUS_CLASS: Record<Status, string> = { paid: "st-p", deposit: "st-d", res: "st-r" };
+
+// Kapara je 50% cene; plaćeno je 100%
+export const DEPOSIT_RATE = 0.5;
+export const paidAmount = (r: Reservation, price: number) =>
+  r.paid ? r.seats * price : r.deposit ? r.seats * price * DEPOSIT_RATE : 0;

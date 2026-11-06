@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Reservation, Status, STATUS_CLASS, STATUS_LABEL, statusOf, Table, TABLES, TABLE_BY_NO, TOTAL_CAP, ZONES, ZONE_KEYS, ZoneKey } from "@/lib/tables";
+import { Reservation, Status, STATUS_CLASS, STATUS_LABEL, statusOf, paidAmount, DEPOSIT_RATE, Table, TABLES, TABLE_BY_NO, TOTAL_CAP, ZONES, ZONE_KEYS, ZoneKey } from "@/lib/tables";
 
 const POLL_MS = 4000;
 
@@ -320,7 +320,7 @@ function Stats({ rows, sold, paidSeats, depSeats }: { rows: Reservation[] | null
     const s = ts.reduce((a, t) => a + sold(t.n), 0);
     const p = ts.reduce((a, t) => a + paidSeats(t.n), 0);
     const d = ts.reduce((a, t) => a + depSeats(t.n), 0);
-    return { k, cap, s, p, d, rev: s * price, revPaid: p * price };
+    return { k, cap, s, p, d, rev: s * price, revPaid: p * price + d * price * DEPOSIT_RATE };
   });
   const tot = per.reduce((a, z) => a + z.s, 0);
   const totPaid = per.reduce((a, z) => a + z.p, 0);
@@ -525,7 +525,7 @@ function TableSheet({ table: t, list, onClose, reload, toast, onLogout }: {
           <div><span>Slobodno</span><strong style={{ color: free ? "var(--fg)" : "var(--danger)" }}>{free}</strong></div>
           <div><span>Iznos</span><strong>{eur(s * z.price)}</strong></div>
         </div>
-        <p className="money">{dp > 0 && <>Kaparisano <b className="st-d">{dp} {mesta(dp)}</b> · </>}Naplaćeno <b className="st-p">{eur(p * z.price)}</b> · Čeka uplatu <b className="st-r">{eur((s - p) * z.price)}</b></p>
+        <p className="money">Naplaćeno <b className="st-p">{eur(p * z.price + dp * z.price * DEPOSIT_RATE)}</b>{dp > 0 && <> (kapara {dp} {mesta(dp)})</>} · Čeka uplatu <b className="st-r">{eur(s * z.price - p * z.price - dp * z.price * DEPOSIT_RATE)}</b></p>
         <div className="seats" aria-label={`${s} od ${t.cap} stolica prodato`}>
           {ordered.flatMap((r) => Array.from({ length: r.seats }, (_, i) => (
             <i key={r.id + i} title={r.name} style={r.paid ? { background: z.color, borderColor: z.color }
@@ -559,7 +559,7 @@ function TableSheet({ table: t, list, onClose, reload, toast, onLogout }: {
               </li>
             ) : (
               <li key={r.id}>
-                <div className="n"><strong>{r.name}</strong><small>{r.phone ? r.phone + " · " : ""}{eur(r.seats * z.price)}</small>{r.source ? <small className="src">Poslao: {r.source}</small> : null}</div>
+                <div className="n"><strong>{r.name}</strong><small>{r.phone ? r.phone + " · " : ""}{eur(r.seats * z.price)}{r.deposit && !r.paid ? ` · kapara ${eur(paidAmount(r, z.price))}` : ""}</small>{r.source ? <small className="src">Poslao: {r.source}</small> : null}</div>
                 <span className="cnt">{r.seats}<em>{mesta(r.seats)}</em></span>
                 <div className="acts">
                   <button className={"pill " + statusOf(r)} onClick={() => togglePaid(r)} disabled={pending === r.id} title="Promeni status">
@@ -623,10 +623,10 @@ function ListSheet({ rows, byTable, onClose, toast, onFallback }: {
 
   function table(sep: string) {
     const q = (v: unknown) => { const s = String(v ?? ""); return /[";,\n\t]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
-    const lines = [["Sto", "Zona", "Gost", "Mesta", "Telefon", "Ko je poslao", "Status", "Cena po mestu", "Iznos"].join(sep)];
+    const lines = [["Sto", "Zona", "Gost", "Mesta", "Telefon", "Ko je poslao", "Status", "Cena po mestu", "Iznos", "Uplaćeno", "Preostalo"].join(sep)];
     flat.forEach(({ t, r }) => {
       const z = ZONES[t.zone];
-      lines.push([t.n, z.short, r.name, r.seats, r.phone, r.source || "", STATUS_LABEL[statusOf(r)], z.price, r.seats * z.price].map(q).join(sep));
+      lines.push([t.n, z.short, r.name, r.seats, r.phone, r.source || "", STATUS_LABEL[statusOf(r)], z.price, r.seats * z.price, paidAmount(r, z.price), r.seats * z.price - paidAmount(r, z.price)].map(q).join(sep));
     });
     return lines.join(sep === "\t" ? "\n" : "\r\n");
   }
@@ -709,7 +709,7 @@ function ListSheet({ rows, byTable, onClose, toast, onFallback }: {
                         <strong>{r.name}</strong>
                         <small>{r.phone ? r.phone + " · " : ""}{r.source ? "Poslao: " + r.source + " · " : ""}<span className={STATUS_CLASS[statusOf(r)]}>{STATUS_LABEL[statusOf(r)]}</span></small>
                       </div>
-                      <div className="gr"><b>{r.seats}</b> {mesta(r.seats)}<br />{eur(r.seats * z.price)}</div>
+                      <div className="gr"><b>{r.seats}</b> {mesta(r.seats)}<br />{eur(r.seats * z.price)}{r.deposit && !r.paid ? <><br /><span className="st-d">kapara {eur(paidAmount(r, z.price))}</span></> : null}</div>
                     </div>
                   ))}
                 </div>
